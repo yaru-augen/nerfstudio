@@ -25,6 +25,13 @@ from typing import Callable, Literal, Optional, Tuple
 import torch
 import yaml
 
+try:
+    import numpy as np
+
+    NUMPY_AVAILABLE = True
+except ImportError:
+    NUMPY_AVAILABLE = False
+
 from nerfstudio.configs.method_configs import all_methods
 from nerfstudio.engine.trainer import TrainerConfig
 from nerfstudio.pipelines.base_pipeline import Pipeline
@@ -47,18 +54,63 @@ def eval_load_checkpoint(config: TrainerConfig, pipeline: Pipeline) -> Tuple[Pat
         # NOTE: this is specific to the checkpoint name format
         if not os.path.exists(config.load_dir):
             CONSOLE.rule("Error", style="red")
-            CONSOLE.print(f"No checkpoint directory found at {config.load_dir}, ", justify="center")
+            CONSOLE.print(
+                f"No checkpoint directory found at {config.load_dir}, ",
+                justify="center",
+            )
             CONSOLE.print(
                 "Please make sure the checkpoint exists, they should be generated periodically during training",
                 justify="center",
             )
             sys.exit(1)
-        load_step = sorted(int(x[x.find("-") + 1 : x.find(".")]) for x in os.listdir(config.load_dir))[-1]
+        load_step = sorted(
+            int(x[x.find("-") + 1 : x.find(".")]) for x in os.listdir(config.load_dir)
+        )[-1]
     else:
         load_step = config.load_step
     load_path = config.load_dir / f"step-{load_step:09d}.ckpt"
     assert load_path.exists(), f"Checkpoint {load_path} does not exist"
-    loaded_state = torch.load(load_path, map_location="cpu")
+
+    # Try loading with weights_only=True first, with safe globals for numpy
+    try:
+        # Import numpy for safe globals allowlisting
+        import numpy as np
+
+        # Allow common numpy functions/classes that might be in checkpoints
+        safe_numpy_globals = [
+            np.core.multiarray.scalar,
+            np.core.multiarray._reconstruct,
+            np.ndarray,
+            np.dtype,
+        ]
+
+        # Try to add numpy dtypes that might be present
+        try:
+            safe_numpy_globals.extend(
+                [
+                    type(np.dtype(np.float32)),
+                    type(np.dtype(np.float64)),
+                    type(np.dtype(np.int32)),
+                    type(np.dtype(np.int64)),
+                ]
+            )
+        except:
+            pass  # Some numpy versions might not have these
+
+        # Use safe_globals context manager to allow numpy functions
+        with torch.serialization.safe_globals(safe_numpy_globals):
+            loaded_state = torch.load(load_path, map_location="cpu", weights_only=True)
+
+    except Exception as e:
+        # Fallback to weights_only=False if the above fails (only if you trust the checkpoint source)
+        CONSOLE.print(
+            f"[yellow]Warning: Loading with weights_only=False due to: {e}[/yellow]"
+        )
+        CONSOLE.print(
+            "[yellow]Only do this if you trust the checkpoint source![/yellow]"
+        )
+        loaded_state = torch.load(load_path, map_location="cpu", weights_only=False)
+
     pipeline.load_pipeline(loaded_state["pipeline"], loaded_state["step"])
     CONSOLE.print(f":white_check_mark: Done loading checkpoint from {load_path}")
     return load_path, load_step
@@ -89,7 +141,9 @@ def eval_setup(
     config = yaml.load(config_path.read_text(), Loader=yaml.Loader)
     assert isinstance(config, TrainerConfig)
 
-    config.pipeline.datamanager._target = all_methods[config.method_name].pipeline.datamanager._target
+    config.pipeline.datamanager._target = all_methods[
+        config.method_name
+    ].pipeline.datamanager._target
     if eval_num_rays_per_chunk:
         config.pipeline.model.eval_num_rays_per_chunk = eval_num_rays_per_chunk
 
