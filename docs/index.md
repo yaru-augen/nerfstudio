@@ -241,7 +241,7 @@ If you use this library or find the documentation useful for your research, plea
   <img src="https://contrib.rocks/image?repo=nerfstudio-project/nerfstudio" />
 </a>
 
-## Maintainers
+## Maintainers test
 
 |                                                 | Nerfstudio Discord | Affiliation                          |
 | ----------------------------------------------- | ------------------ | ------------------------------------ |
