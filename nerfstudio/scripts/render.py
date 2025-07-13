@@ -311,9 +311,9 @@ def _render_trajectory_video(
                         target_crf = crf if crf is not None else 20
 
                         ffmpeg_args_options = [
-                            # Option 1: H.264 with CRF (most compatible, respects user quality)
+                            # Option 1: H.264 with libx264 + CRF (excellent quality, wide compatibility, fast)
                             ["-c:v", "libx264", "-crf", str(target_crf)],
-                            # Option 2: VP9 with user CRF or high quality default
+                            # Option 2: VP9 with user CRF (best quality, superior compression)
                             [
                                 "-c:v",
                                 "libvpx-vp9",
@@ -322,16 +322,9 @@ def _render_trajectory_video(
                                 "-b:v",
                                 "0",
                             ],
-                            # Option 3: AV1 with user CRF or high quality default
-                            [
-                                "-c:v",
-                                "libaom-av1",
-                                "-crf",
-                                str(min(target_crf + 5, 30)),
-                                "-cpu-used",
-                                "4",
-                            ],
-                            # Option 4: Default fallback (compatibility)
+                            # Option 3: H.264 with libopenh264 + bitrate (fallback, compatible)
+                            ["-c:v", "libopenh264", "-b:v", "5M", "-maxrate", "8M"],
+                            # Option 4: Default fallback (ultimate compatibility)
                             [],
                         ]
 
@@ -676,8 +669,40 @@ class RenderCameraPath(BaseRender):
                 if self.output_format == "video":
                     # Use custom CRF if provided, otherwise use optimized default
                     ods_crf = self.crf if self.crf is not None else 23
-                    ffmpeg_ods_command = f'ffmpeg -y -i "{left_eye_path}" -i "{right_eye_path}" -filter_complex "[0:v]pad=iw:2*ih[int];[int][1:v]overlay=0:h" -c:v libx264 -crf {ods_crf} -preset veryfast "{self.output_path}"'
-                    run_command(ffmpeg_ods_command, verbose=False)
+
+                    # Smart codec selection with fallback for ODS rendering
+                    ods_codec_options = [
+                        f"-c:v libx264 -crf {ods_crf} -preset veryfast",
+                        f"-c:v libvpx-vp9 -crf {ods_crf} -b:v 0",
+                        f"-c:v libopenh264 -b:v 5M -maxrate 8M",
+                        "",  # Default codec
+                    ]
+
+                    ods_success = False
+                    for codec_args in ods_codec_options:
+                        try:
+                            ffmpeg_ods_command = f'ffmpeg -y -i "{left_eye_path}" -i "{right_eye_path}" -filter_complex "[0:v]pad=iw:2*ih[int];[int][1:v]overlay=0:h" {codec_args} "{self.output_path}"'
+                            run_command(ffmpeg_ods_command, verbose=False)
+                            ods_success = True
+                            if codec_args:
+                                codec_name = (
+                                    codec_args.split()[1]
+                                    if len(codec_args.split()) > 1
+                                    else "default"
+                                )
+                                CONSOLE.print(
+                                    f"[green]ODS rendering using {codec_name} encoder[/green]"
+                                )
+                            else:
+                                CONSOLE.print(
+                                    "[yellow]ODS rendering using default encoder[/yellow]"
+                                )
+                            break
+                        except Exception:
+                            continue
+
+                    if not ods_success:
+                        CONSOLE.print("[red]All ODS codec options failed[/red]")
                 if self.output_format == "images":
                     # create a folder for the stacked renders
                     self.output_path = Path(str(left_eye_path.parent)[:-5])
@@ -697,8 +722,42 @@ class RenderCameraPath(BaseRender):
                 self.output_path = Path(str(left_eye_path.parent)[:-5] + ".mp4")
                 ffmpeg_vr180_command = ""
                 if self.output_format == "video":
-                    ffmpeg_vr180_command = f'ffmpeg -y -i "{right_eye_path}" -i "{left_eye_path}" -filter_complex "[1:v]hstack=inputs=2" -c:a copy "{self.output_path}"'
-                    run_command(ffmpeg_vr180_command, verbose=False)
+                    # Use custom CRF if provided, otherwise use optimized default
+                    vr180_crf = self.crf if self.crf is not None else 23
+
+                    # Smart codec selection with fallback for VR180 rendering
+                    vr180_codec_options = [
+                        f"-c:v libx264 -crf {vr180_crf}",
+                        f"-c:v libvpx-vp9 -crf {vr180_crf} -b:v 0",
+                        f"-c:v libopenh264 -b:v 5M -maxrate 8M",
+                        "",  # Default codec
+                    ]
+
+                    vr180_success = False
+                    for codec_args in vr180_codec_options:
+                        try:
+                            ffmpeg_vr180_command = f'ffmpeg -y -i "{right_eye_path}" -i "{left_eye_path}" -filter_complex "[1:v]hstack=inputs=2" {codec_args} -c:a copy "{self.output_path}"'
+                            run_command(ffmpeg_vr180_command, verbose=False)
+                            vr180_success = True
+                            if codec_args:
+                                codec_name = (
+                                    codec_args.split()[1]
+                                    if len(codec_args.split()) > 1
+                                    else "default"
+                                )
+                                CONSOLE.print(
+                                    f"[green]VR180 rendering using {codec_name} encoder[/green]"
+                                )
+                            else:
+                                CONSOLE.print(
+                                    "[yellow]VR180 rendering using default encoder[/yellow]"
+                                )
+                            break
+                        except Exception:
+                            continue
+
+                    if not vr180_success:
+                        CONSOLE.print("[red]All VR180 codec options failed[/red]")
                 if self.output_format == "images":
                     # create a folder for the stacked renders
                     self.output_path = Path(str(left_eye_path.parent)[:-5])
