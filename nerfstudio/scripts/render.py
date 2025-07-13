@@ -308,14 +308,7 @@ def _render_trajectory_video(
                                 path=output_filename,
                                 shape=(render_height, render_width),
                                 fps=fps,
-                                ffmpeg_args=[
-                                    "-crf",
-                                    "0",
-                                    "-preset",
-                                    "veryslow",
-                                    "-pix_fmt",
-                                    "yuv444p",
-                                ],
+                                ffmpeg_args=[],
                             )
                         )
                     writer.add_image(render_image)
