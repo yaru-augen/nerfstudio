@@ -303,15 +303,64 @@ def _render_trajectory_video(
                     if writer is None:
                         render_width = int(render_image.shape[1])
                         render_height = int(render_image.shape[0])
-                        writer = stack.enter_context(
-                            media.VideoWriter(
-                                path=output_filename,
-                                shape=(render_height, render_width),
-                                fps=fps,
-                                ffmpeg_args=[],
+
+                        # Smart codec selection for best quality with fallback
+                        # Try high-quality codecs first, fall back to compatibility
+                        ffmpeg_args_options = [
+                            # Option 1: H.264 with high quality settings (most compatible)
+                            ["-c:v", "libopenh264", "-b:v", "5M", "-maxrate", "8M"],
+                            # Option 2: VP9 with high quality (excellent compression)
+                            ["-c:v", "libvpx-vp9", "-crf", "20", "-b:v", "0"],
+                            # Option 3: AV1 with high quality (cutting edge, best compression)
+                            ["-c:v", "libaom-av1", "-crf", "25", "-cpu-used", "4"],
+                            # Option 4: Default fallback (compatibility)
+                            [],
+                        ]
+
+                        # Try each codec option until one works
+                        writer_created = False
+                        for ffmpeg_args in ffmpeg_args_options:
+                            try:
+                                writer = stack.enter_context(
+                                    media.VideoWriter(
+                                        path=output_filename,
+                                        shape=(render_height, render_width),
+                                        fps=fps,
+                                        ffmpeg_args=ffmpeg_args,
+                                    )
+                                )
+                                writer_created = True
+                                if ffmpeg_args:
+                                    codec_name = (
+                                        ffmpeg_args[1]
+                                        if len(ffmpeg_args) > 1
+                                        else "default"
+                                    )
+                                    CONSOLE.print(
+                                        f"[green]Using {codec_name} encoder for high quality video[/green]"
+                                    )
+                                else:
+                                    CONSOLE.print(
+                                        "[yellow]Using default encoder (fallback)[/yellow]"
+                                    )
+                                break
+                            except Exception:
+                                # If this codec fails, try the next one
+                                continue
+
+                        if not writer_created:
+                            # Last resort: basic default
+                            writer = stack.enter_context(
+                                media.VideoWriter(
+                                    path=output_filename,
+                                    shape=(render_height, render_width),
+                                    fps=fps,
+                                    ffmpeg_args=[],
+                                )
                             )
-                        )
-                    writer.add_image(render_image)
+
+                    if writer is not None:
+                        writer.add_image(render_image)
 
     table = Table(
         title=None,
@@ -409,7 +458,7 @@ xmlns:GSpherical='http://ns.google.com/videos/1.0/spherical/'>
 class CropData:
     """Data for cropping an image."""
 
-    background_color: Float[Tensor, "3"] = torch.tensor([0.0, 0.0, 0.0])
+    background_color: Tensor = torch.tensor([0.0, 0.0, 0.0])
     """background color"""
     obb: OrientedBox = field(
         default_factory=lambda: OrientedBox(
