@@ -94,6 +94,7 @@ def _render_trajectory_video(
     colormap_options: colormaps.ColormapOptions = colormaps.ColormapOptions(),
     render_nearest_camera=False,
     check_occlusions: bool = False,
+    crf: Optional[int] = None,
 ) -> None:
     """Helper function to create a video of the spiral trajectory.
 
@@ -306,16 +307,38 @@ def _render_trajectory_video(
 
                         # Smart codec selection for best quality with fallback
                         # Try high-quality codecs first, fall back to compatibility
+                        # Use custom CRF if provided, otherwise use optimized defaults
+                        target_crf = crf if crf is not None else 20
+
                         ffmpeg_args_options = [
-                            # Option 1: H.264 with high quality settings (most compatible)
-                            ["-c:v", "libopenh264", "-b:v", "5M", "-maxrate", "8M"],
-                            # Option 2: VP9 with high quality (excellent compression)
-                            ["-c:v", "libvpx-vp9", "-crf", "20", "-b:v", "0"],
-                            # Option 3: AV1 with high quality (cutting edge, best compression)
-                            ["-c:v", "libaom-av1", "-crf", "25", "-cpu-used", "4"],
+                            # Option 1: H.264 with CRF (most compatible, respects user quality)
+                            ["-c:v", "libx264", "-crf", str(target_crf)],
+                            # Option 2: VP9 with user CRF or high quality default
+                            [
+                                "-c:v",
+                                "libvpx-vp9",
+                                "-crf",
+                                str(target_crf),
+                                "-b:v",
+                                "0",
+                            ],
+                            # Option 3: AV1 with user CRF or high quality default
+                            [
+                                "-c:v",
+                                "libaom-av1",
+                                "-crf",
+                                str(min(target_crf + 5, 30)),
+                                "-cpu-used",
+                                "4",
+                            ],
                             # Option 4: Default fallback (compatibility)
                             [],
                         ]
+
+                        if crf is not None:
+                            CONSOLE.print(
+                                f"[blue]Using custom CRF: {crf} for enhanced quality[/blue]"
+                            )
 
                         # Try each codec option until one works
                         writer_created = False
@@ -544,6 +567,8 @@ class RenderCameraPath(BaseRender):
     """Filename of the camera path to render."""
     output_format: Literal["images", "video"] = "video"
     """How to save output data."""
+    crf: Optional[int] = None
+    """CRF value for video quality (lower = better quality)."""
 
     def main(self) -> None:
         """Main function."""
@@ -604,6 +629,7 @@ class RenderCameraPath(BaseRender):
             colormap_options=self.colormap_options,
             render_nearest_camera=self.render_nearest_camera,
             check_occlusions=self.check_occlusions,
+            crf=self.crf,
         )
 
         if (
@@ -639,6 +665,7 @@ class RenderCameraPath(BaseRender):
                 colormap_options=self.colormap_options,
                 render_nearest_camera=self.render_nearest_camera,
                 check_occlusions=self.check_occlusions,
+                crf=self.crf,
             )
 
             self.output_path = Path(str(left_eye_path.parent)[:-5] + ".mp4")
@@ -647,7 +674,9 @@ class RenderCameraPath(BaseRender):
                 # stack the left and right eye renders vertically for ODS final output
                 ffmpeg_ods_command = ""
                 if self.output_format == "video":
-                    ffmpeg_ods_command = f'ffmpeg -y -i "{left_eye_path}" -i "{right_eye_path}" -filter_complex "[0:v]pad=iw:2*ih[int];[int][1:v]overlay=0:h" -c:v libx264 -crf 23 -preset veryfast "{self.output_path}"'
+                    # Use custom CRF if provided, otherwise use optimized default
+                    ods_crf = self.crf if self.crf is not None else 23
+                    ffmpeg_ods_command = f'ffmpeg -y -i "{left_eye_path}" -i "{right_eye_path}" -filter_complex "[0:v]pad=iw:2*ih[int];[int][1:v]overlay=0:h" -c:v libx264 -crf {ods_crf} -preset veryfast "{self.output_path}"'
                     run_command(ffmpeg_ods_command, verbose=False)
                 if self.output_format == "images":
                     # create a folder for the stacked renders
@@ -700,6 +729,8 @@ class RenderInterpolated(BaseRender):
     """Frame rate of the output video."""
     output_format: Literal["images", "video"] = "video"
     """How to save output data."""
+    crf: Optional[int] = None
+    """CRF value for video quality (lower = better quality)."""
 
     def main(self) -> None:
         """Main function."""
@@ -739,6 +770,7 @@ class RenderInterpolated(BaseRender):
             colormap_options=self.colormap_options,
             render_nearest_camera=self.render_nearest_camera,
             check_occlusions=self.check_occlusions,
+            crf=self.crf,
         )
 
 
@@ -754,6 +786,8 @@ class SpiralRender(BaseRender):
     """Frame rate of the output video (only for interpolate trajectory)."""
     radius: float = 0.1
     """Radius of the spiral."""
+    crf: Optional[int] = None
+    """CRF value for video quality (lower = better quality)."""
 
     def main(self) -> None:
         """Main function."""
@@ -791,6 +825,7 @@ class SpiralRender(BaseRender):
             colormap_options=self.colormap_options,
             render_nearest_camera=self.render_nearest_camera,
             check_occlusions=self.check_occlusions,
+            crf=self.crf,
         )
 
 
