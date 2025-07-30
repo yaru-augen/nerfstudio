@@ -3,7 +3,7 @@ import torch
 from nerfstudio.models.splatfacto import SplatfactoModel
 
 # Dummy outputs and batch for testing get_image_metrics_and_images
-H, W = 4, 4
+H, W = 32, 32
 predicted_rgb = torch.rand(H, W, 3, device="cpu")
 gt_img = torch.rand(H, W, 3, device="cpu")
 background = torch.rand(3, device="cpu")
