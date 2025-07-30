@@ -847,6 +847,42 @@ class SplatfactoModel(Model):
                 )
         else:
             crop_ids = None
+        # Trace NaNs in key intermediate tensors after assignment
+        if crop_ids is not None:
+            opacities_crop = self.opacities[crop_ids]
+            self.trace_nan(opacities_crop, "opacities_crop", "get_outputs: after crop")
+            means_crop = self.means[crop_ids]
+            self.trace_nan(means_crop, "means_crop", "get_outputs: after crop")
+            features_dc_crop = self.features_dc[crop_ids]
+            self.trace_nan(
+                features_dc_crop, "features_dc_crop", "get_outputs: after crop"
+            )
+            features_rest_crop = self.features_rest[crop_ids]
+            self.trace_nan(
+                features_rest_crop, "features_rest_crop", "get_outputs: after crop"
+            )
+            scales_crop = self.scales[crop_ids]
+            self.trace_nan(scales_crop, "scales_crop", "get_outputs: after crop")
+            quats_crop = self.quats[crop_ids]
+            self.trace_nan(quats_crop, "quats_crop", "get_outputs: after crop")
+        else:
+            opacities_crop = self.opacities
+            self.trace_nan(opacities_crop, "opacities", "get_outputs: after crop (all)")
+            means_crop = self.means
+            self.trace_nan(means_crop, "means", "get_outputs: after crop (all)")
+            features_dc_crop = self.features_dc
+            self.trace_nan(
+                features_dc_crop, "features_dc", "get_outputs: after crop (all)"
+            )
+            features_rest_crop = self.features_rest
+            self.trace_nan(
+                features_rest_crop, "features_rest", "get_outputs: after crop (all)"
+            )
+            scales_crop = self.scales
+            self.trace_nan(scales_crop, "scales", "get_outputs: after crop (all)")
+            quats_crop = self.quats
+            self.trace_nan(quats_crop, "quats", "get_outputs: after crop (all)")
+        # ...existing code continues...
         camera_downscale = self._get_downscale_factor()
         camera.rescale_output_resolution(1 / camera_downscale)
         # shift the camera to center of scene looking at center
@@ -1173,63 +1209,31 @@ class SplatfactoModel(Model):
         )
         predicted_rgb = outputs["rgb"]
 
+        # Trace NaNs in gt_rgb and predicted_rgb before metrics
+        self.trace_nan(gt_rgb, "gt_rgb", "get_image_metrics_and_images: before metrics")
+        self.trace_nan(
+            predicted_rgb,
+            "predicted_rgb",
+            "get_image_metrics_and_images: before metrics",
+        )
+
         try:
             combined_rgb = torch.cat([gt_rgb, predicted_rgb], dim=1)
-        except:
+        except Exception as e:
+            print(f"[TRACE][ERROR] Failed to concatenate gt_rgb and predicted_rgb: {e}")
             return {}, {}
 
         # Switch images from [H, W, C] to [1, C, H, W] for metrics computations
         gt_rgb = torch.moveaxis(gt_rgb, -1, 0)[None, ...]
         predicted_rgb = torch.moveaxis(predicted_rgb, -1, 0)[None, ...]
 
-        def safe_min(x):
-            if torch.isnan(x).all():
-                return float("nan")
-            return torch.min(
-                torch.where(
-                    torch.isnan(x),
-                    torch.tensor(float("inf"), device=x.device, dtype=x.dtype),
-                    x,
-                )
-            ).item()
-
-        def safe_max(x):
-            if torch.isnan(x).all():
-                return float("nan")
-            return torch.max(
-                torch.where(
-                    torch.isnan(x),
-                    torch.tensor(float("-inf"), device=x.device, dtype=x.dtype),
-                    x,
-                )
-            ).item()
-
-        gt_nan = torch.isnan(gt_rgb).any().item()
-        pred_nan = torch.isnan(predicted_rgb).any().item()
-        print(
-            "[DEBUG] gt_rgb: min=",
-            safe_min(gt_rgb),
-            "max=",
-            safe_max(gt_rgb),
-            "any NaN=",
-            gt_nan,
+        # Trace NaNs after moveaxis
+        self.trace_nan(gt_rgb, "gt_rgb", "get_image_metrics_and_images: after moveaxis")
+        self.trace_nan(
+            predicted_rgb,
+            "predicted_rgb",
+            "get_image_metrics_and_images: after moveaxis",
         )
-        print(
-            "[DEBUG] predicted_rgb: min=",
-            safe_min(predicted_rgb),
-            "max=",
-            safe_max(predicted_rgb),
-            "any NaN=",
-            pred_nan,
-        )
-        if gt_nan:
-            raise RuntimeError(
-                "NaN detected in gt_rgb in get_image_metrics_and_images!"
-            )
-        if pred_nan:
-            raise RuntimeError(
-                "NaN detected in predicted_rgb in get_image_metrics_and_images!"
-            )
 
         psnr = self.psnr(gt_rgb, predicted_rgb)
         ssim = self.ssim(gt_rgb, predicted_rgb)
@@ -1243,6 +1247,11 @@ class SplatfactoModel(Model):
 
         return metrics_dict, images_dict
 
-        images_dict = {"img": combined_rgb}
-
-        return metrics_dict, images_dict
+    def trace_nan(self, tensor, name, location):
+        if torch.isnan(tensor).any():
+            print(f"[TRACE][NaN] Detected in {name} at {location}")
+            print(
+                f"    min: {tensor.min().item()}  max: {tensor.max().item()}  shape: {tensor.shape}"
+            )
+            return True
+        return False
