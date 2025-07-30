@@ -299,6 +299,9 @@ class SplatfactoModel(Model):
                 get_color(self.config.background_color) ** self.config.gamma
             )
 
+        # Global NaN check after initialization
+        self.check_all_params_for_nan("after populate_modules")
+
     @property
     def colors(self):
         if self.config.sh_degree > 0:
@@ -343,6 +346,8 @@ class SplatfactoModel(Model):
         return self.gauss_params["opacities"]
 
     def load_state_dict(self, dict, **kwargs):  # type: ignore
+        # Check for NaNs in loaded parameters
+        self.check_all_params_for_nan("after load_state_dict")
         # resize the parameters to match the new number of points
         self.step = 30000
         if "means" in dict:
@@ -365,6 +370,16 @@ class SplatfactoModel(Model):
                 torch.zeros(new_shape, device=self.device)
             )
         super().load_state_dict(dict, **kwargs)
+
+    def check_all_params_for_nan(self, location="global check"):
+        for name, param in self.gauss_params.items():
+            if torch.isnan(param).any():
+                print(f"[TRACE][NaN] Detected in parameter {name} at {location}")
+                print(
+                    f"    min: {param.min().item()}  max: {param.max().item()}  shape: {param.shape}"
+                )
+                return True
+        return False
 
     def k_nearest_sklearn(self, x: torch.Tensor, k: int):
         """
@@ -804,6 +819,8 @@ class SplatfactoModel(Model):
         Returns:
             Outputs of model. (ie. rendered colors)
         """
+        # Global NaN check for all parameters at the start of forward
+        self.check_all_params_for_nan("get_outputs: start")
         if not isinstance(camera, Cameras):
             print("Called get_outputs with not a camera")
             return {}
@@ -882,7 +899,6 @@ class SplatfactoModel(Model):
             self.trace_nan(scales_crop, "scales", "get_outputs: after crop (all)")
             quats_crop = self.quats
             self.trace_nan(quats_crop, "quats", "get_outputs: after crop (all)")
-        # ...existing code continues...
         camera_downscale = self._get_downscale_factor()
         camera.rescale_output_resolution(1 / camera_downscale)
         # shift the camera to center of scene looking at center
