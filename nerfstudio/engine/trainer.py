@@ -32,7 +32,7 @@ import viser
 from rich import box, style
 from rich.panel import Panel
 from rich.table import Table
-from torch.amp import GradScaler
+from torch.cuda.amp import GradScaler
 
 from nerfstudio.configs.experiment_config import ExperimentConfig
 from nerfstudio.engine.callbacks import (
