@@ -1182,19 +1182,41 @@ class SplatfactoModel(Model):
         gt_rgb = torch.moveaxis(gt_rgb, -1, 0)[None, ...]
         predicted_rgb = torch.moveaxis(predicted_rgb, -1, 0)[None, ...]
 
+        def safe_min(x):
+            if torch.isnan(x).all():
+                return float("nan")
+            return torch.min(
+                torch.where(
+                    torch.isnan(x),
+                    torch.tensor(float("inf"), device=x.device, dtype=x.dtype),
+                    x,
+                )
+            ).item()
+
+        def safe_max(x):
+            if torch.isnan(x).all():
+                return float("nan")
+            return torch.max(
+                torch.where(
+                    torch.isnan(x),
+                    torch.tensor(float("-inf"), device=x.device, dtype=x.dtype),
+                    x,
+                )
+            ).item()
+
         print(
             "[DEBUG] gt_rgb: min=",
-            torch.nanmin(gt_rgb).item(),
+            safe_min(gt_rgb),
             "max=",
-            torch.nanmax(gt_rgb).item(),
+            safe_max(gt_rgb),
             "any NaN=",
             torch.isnan(gt_rgb).any().item(),
         )
         print(
             "[DEBUG] predicted_rgb: min=",
-            torch.nanmin(predicted_rgb).item(),
+            safe_min(predicted_rgb),
             "max=",
-            torch.nanmax(predicted_rgb).item(),
+            safe_max(predicted_rgb),
             "any NaN=",
             torch.isnan(predicted_rgb).any().item(),
         )
