@@ -30,8 +30,25 @@ def get_dummy_model():
 
 if __name__ == "__main__":
     model = get_dummy_model()
+    # Print raw shapes and dtypes for debugging
+    print(
+        "raw batch['image'] shape:",
+        batch["image"].shape,
+        "dtype:",
+        batch["image"].dtype,
+    )
+    print(
+        "raw outputs['rgb'] shape:",
+        outputs["rgb"].shape,
+        "dtype:",
+        outputs["rgb"].dtype,
+    )
+    gt_rgb = model.composite_with_background(
+        model.get_gt_img(batch["image"]), outputs["background"]
+    )
+    predicted_rgb = outputs["rgb"]
+    print("gt_rgb shape:", gt_rgb.shape, "dtype:", gt_rgb.dtype)
+    print("predicted_rgb shape:", predicted_rgb.shape, "dtype:", predicted_rgb.dtype)
     metrics, images = model.get_image_metrics_and_images(outputs, batch)
     print("Metrics:", metrics)
-    print("Images dict keys:", images.keys())
-    print("Images dict keys:", images.keys())
     print("Images dict keys:", images.keys())
