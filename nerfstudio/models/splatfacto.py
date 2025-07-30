@@ -1204,13 +1204,15 @@ class SplatfactoModel(Model):
                 )
             ).item()
 
+        gt_nan = torch.isnan(gt_rgb).any().item()
+        pred_nan = torch.isnan(predicted_rgb).any().item()
         print(
             "[DEBUG] gt_rgb: min=",
             safe_min(gt_rgb),
             "max=",
             safe_max(gt_rgb),
             "any NaN=",
-            torch.isnan(gt_rgb).any().item(),
+            gt_nan,
         )
         print(
             "[DEBUG] predicted_rgb: min=",
@@ -1218,8 +1220,16 @@ class SplatfactoModel(Model):
             "max=",
             safe_max(predicted_rgb),
             "any NaN=",
-            torch.isnan(predicted_rgb).any().item(),
+            pred_nan,
         )
+        if gt_nan:
+            raise RuntimeError(
+                "NaN detected in gt_rgb in get_image_metrics_and_images!"
+            )
+        if pred_nan:
+            raise RuntimeError(
+                "NaN detected in predicted_rgb in get_image_metrics_and_images!"
+            )
 
         psnr = self.psnr(gt_rgb, predicted_rgb)
         ssim = self.ssim(gt_rgb, predicted_rgb)
