@@ -17,7 +17,7 @@ def get_dummy_model():
     from nerfstudio.data.scene_box import OrientedBox
     from nerfstudio.models.splatfacto import SplatfactoModelConfig
 
-    config = SplatfactoModelConfig()
+    config = SplatfactoModelConfig(num_downscales=0)
     # Create a dummy OrientedBox (scene_box) and set num_train_data=1
     scene_box = OrientedBox(torch.zeros(3), torch.ones(3), torch.eye(3))
     num_train_data = 1
