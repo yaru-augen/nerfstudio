@@ -245,15 +245,15 @@ class SplatfactoModel(Model):
                 torch.isnan(self.seed_points[1]).any()
                 or torch.isinf(self.seed_points[1]).any()
             ):
-                print(
-                    "[DEBUG][NaN] self.seed_points[1] contains NaN or Inf! min:",
+                CONSOLE.log(
+                    "[TRACE][NaN] self.seed_points[1] contains NaN or Inf! min:",
                     torch.nanmin(self.seed_points[1]),
                     "max:",
                     torch.nanmax(self.seed_points[1]),
                 )
             else:
-                print(
-                    "[DEBUG] self.seed_points[1] is valid. min:",
+                CONSOLE.log(
+                    "[TRACE][NaN] self.seed_points[1] is valid. min:",
                     torch.min(self.seed_points[1]),
                     "max:",
                     torch.max(self.seed_points[1]),
@@ -264,8 +264,8 @@ class SplatfactoModel(Model):
                 self.seed_points[1] / 255
             ) ** self.config.gamma  # convert to linear RGB
             if torch.isnan(rgb).any() or torch.isinf(rgb).any():
-                print(
-                    "[DEBUG][NaN] rgb contains NaN or Inf! min:",
+                CONSOLE.log(
+                    "[TRACE][NaN] rgb contains NaN or Inf! min:",
                     torch.nanmin(rgb),
                     "max:",
                     torch.nanmax(rgb),
@@ -273,6 +273,9 @@ class SplatfactoModel(Model):
             if self.config.sh_degree > 0:
                 shs[:, 0, :3] = RGB2SH(rgb)
                 shs[:, 1:, 3:] = 0.0
+                CONSOLE.log(
+                    f"Initialized SH coefficients from RGB with sh_degree={self.config.sh_degree}, shs={shs}"
+                )
             else:
                 CONSOLE.log("use color only optimization with sigmoid activation")
                 shs[:, 0, :3] = torch.logit(rgb, eps=1e-10)
@@ -400,8 +403,8 @@ class SplatfactoModel(Model):
     def check_all_params_for_nan(self, location="global check"):
         for name, param in self.gauss_params.items():
             if torch.isnan(param).any():
-                print(f"[TRACE][NaN] Detected in parameter {name} at {location}")
-                print(
+                CONSOLE.log(f"[TRACE][NaN] Detected in parameter {name} at {location}")
+                CONSOLE.log(
                     f"    min: {param.min().item()}  max: {param.max().item()}  shape: {param.shape}"
                 )
                 return True
@@ -848,7 +851,7 @@ class SplatfactoModel(Model):
         # Global NaN check for all parameters at the start of forward
         self.check_all_params_for_nan("get_outputs: start")
         if not isinstance(camera, Cameras):
-            print("Called get_outputs with not a camera")
+            CONSOLE.log("Called get_outputs with not a camera")
             return {}
         assert camera.shape[0] == 1, "Only one camera at a time"
 
@@ -1262,7 +1265,9 @@ class SplatfactoModel(Model):
         try:
             combined_rgb = torch.cat([gt_rgb, predicted_rgb], dim=1)
         except Exception as e:
-            print(f"[TRACE][ERROR] Failed to concatenate gt_rgb and predicted_rgb: {e}")
+            CONSOLE.log(
+                f"[TRACE][ERROR] Failed to concatenate gt_rgb and predicted_rgb: {e}"
+            )
             return {}, {}
 
         # Switch images from [H, W, C] to [1, C, H, W] for metrics computations
@@ -1291,8 +1296,8 @@ class SplatfactoModel(Model):
 
     def trace_nan(self, tensor, name, location):
         if torch.isnan(tensor).any():
-            print(f"[TRACE][NaN] Detected in {name} at {location}")
-            print(
+            CONSOLE.log(f"[TRACE][NaN] Detected in {name} at {location}")
+            CONSOLE.log(
                 f"    min: {tensor.min().item()}  max: {tensor.max().item()}  shape: {tensor.shape}"
             )
             return True
