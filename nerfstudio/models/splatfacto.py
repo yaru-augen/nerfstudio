@@ -240,10 +240,36 @@ class SplatfactoModel(Model):
             # We can have colors without points.
             and self.seed_points[1].shape[0] > 0
         ):
+            # NaN/inf check for self.seed_points[1]
+            if (
+                torch.isnan(self.seed_points[1]).any()
+                or torch.isinf(self.seed_points[1]).any()
+            ):
+                print(
+                    "[DEBUG][NaN] self.seed_points[1] contains NaN or Inf! min:",
+                    torch.nanmin(self.seed_points[1]),
+                    "max:",
+                    torch.nanmax(self.seed_points[1]),
+                )
+            else:
+                print(
+                    "[DEBUG] self.seed_points[1] is valid. min:",
+                    torch.min(self.seed_points[1]),
+                    "max:",
+                    torch.max(self.seed_points[1]),
+                )
+
             shs = torch.zeros((self.seed_points[1].shape[0], dim_sh, 3)).float().cuda()
             rgb = (
                 self.seed_points[1] / 255
             ) ** self.config.gamma  # convert to linear RGB
+            if torch.isnan(rgb).any() or torch.isinf(rgb).any():
+                print(
+                    "[DEBUG][NaN] rgb contains NaN or Inf! min:",
+                    torch.nanmin(rgb),
+                    "max:",
+                    torch.nanmax(rgb),
+                )
             if self.config.sh_degree > 0:
                 shs[:, 0, :3] = RGB2SH(rgb)
                 shs[:, 1:, 3:] = 0.0
