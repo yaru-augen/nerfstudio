@@ -36,7 +36,9 @@ class SceneBox:
 
     def within(self, pts: Float[Tensor, "n 3"]):
         """Returns a boolean mask indicating whether each point is within the box."""
-        return torch.all(pts > self.aabb[0], dim=-1) & torch.all(pts < self.aabb[1], dim=-1)
+        return torch.all(pts > self.aabb[0], dim=-1) & torch.all(
+            pts < self.aabb[1], dim=-1
+        )
 
     def get_diagonal_length(self):
         """Returns the longest diagonal length."""
@@ -49,7 +51,9 @@ class SceneBox:
         diff = self.aabb[1] - self.aabb[0]
         return self.aabb[0] + diff / 2.0
 
-    def get_centered_and_scaled_scene_box(self, scale_factor: Union[float, torch.Tensor] = 1.0):
+    def get_centered_and_scaled_scene_box(
+        self, scale_factor: Union[float, torch.Tensor] = 1.0
+    ):
         """Returns a new box that has been shifted and rescaled to be centered
         about the origin.
 
@@ -59,7 +63,9 @@ class SceneBox:
         return SceneBox(aabb=(self.aabb - self.get_center()) * scale_factor)
 
     @staticmethod
-    def get_normalized_positions(positions: Float[Tensor, "*batch 3"], aabb: Float[Tensor, "2 3"]):
+    def get_normalized_positions(
+        positions: Float[Tensor, "*batch 3"], aabb: Float[Tensor, "2 3"]
+    ):
         """Return normalized positions in range [0, 1] based on the aabb axis-aligned bounding box.
 
         Args:
@@ -71,7 +77,9 @@ class SceneBox:
         return normalized_positions
 
     @staticmethod
-    def from_camera_poses(poses: Float[Tensor, "*batch 3 4"], scale_factor: float) -> "SceneBox":
+    def from_camera_poses(
+        poses: Float[Tensor, "*batch 3 4"], scale_factor: float
+    ) -> "SceneBox":
         """Returns the instance of SceneBox that fully envelopes a set of poses
 
         Args:
@@ -102,14 +110,16 @@ class OrientedBox:
         pts = torch.cat((pts, torch.ones_like(pts[..., :1])), dim=-1)
         pts = torch.matmul(H_world2bbox, pts.T).T[..., :3]
 
-        comp_l = torch.tensor(-S / 2)
-        comp_m = torch.tensor(S / 2)
+        comp_l = (-S / 2).detach().clone()
+        comp_m = (S / 2).detach().clone()
         mask = torch.all(torch.concat([pts > comp_l, pts < comp_m], dim=-1), dim=-1)
         return mask
 
     @staticmethod
     def from_params(
-        pos: Tuple[float, float, float], rpy: Tuple[float, float, float], scale: Tuple[float, float, float]
+        pos: Tuple[float, float, float],
+        rpy: Tuple[float, float, float],
+        scale: Tuple[float, float, float],
     ):
         """Construct a box from position, rotation, and scale parameters."""
         R = torch.tensor(vtf.SO3.from_rpy_radians(rpy[0], rpy[1], rpy[2]).as_matrix())
